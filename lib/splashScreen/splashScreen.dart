@@ -36,7 +36,10 @@ class _MySplashScreenState extends State<MySplashScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'images/abc.jpg',
+                'images/vastukiLogo.jpg',
+                width: 300,
+                height: 300,
+                fit: BoxFit.contain,
               ),
               const SizedBox(height: 20),
               const Padding(
