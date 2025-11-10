@@ -8,8 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:projectz/global/global.dart';
 import 'package:projectz/widgets/customTextField.dart';
 import 'package:http/http.dart' as http;
+import 'package:projectz/widgets/loadingDialog.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:projectz/mainScreens/homeScreen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -70,6 +77,392 @@ class _RegisterScreenState extends State<RegisterScreen> {
       print('Error getting address from API: $e');
     }
     return null;
+  }
+
+  Future<void> formValidation() async
+  {
+    if(imageXFile == null)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please select an image."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(nameFieldController.text.trim().isEmpty)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please enter your name."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(emailFieldController.text.trim().isEmpty)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please enter your email."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(!emailFieldController.text.contains("@"))
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please enter a valid email."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(passwordFieldController.text.trim().isEmpty)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please enter a password."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(passwordFieldController.text.length < 6)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Password must be at least 6 characters."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(confirmPasswordFieldController.text.trim().isEmpty)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please confirm your password."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(passwordFieldController.text != confirmPasswordFieldController.text)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Passwords do not match."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(phoneFieldController.text.trim().isEmpty)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please enter your phone number."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else if(addressFieldController.text.trim().isEmpty)
+    {
+      showDialog(
+        context: context, 
+        builder: 
+        (c)
+        {
+          return AlertDialog(
+            content: Text("Please provide your shop address."),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        }
+      );
+    }
+    else
+    {
+      // proceed with registration
+      showDialog(
+        context: context, 
+        builder: (c) {
+          return LoadingDialog(
+            message: "Registering Account",
+          );
+        }
+      );
+
+      // Upload image to Supabase and register user
+      await uploadImageAndRegister();
+    }
+  }
+
+  Future<void> uploadImageAndRegister() async {
+    try {
+      if (imageXFile == null || imageBytes == null) {
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please select an image')),
+        );
+        return;
+      }
+
+      // Generate unique filename
+      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+      String fileExtension = imageXFile!.name.split('.').last;
+      String fullFileName = '$fileName.$fileExtension';
+
+      // Upload to Supabase Storage
+      final supabaseClient = supabase.Supabase.instance.client;
+      
+      await supabaseClient.storage
+        .from('user-images')
+        .uploadBinary(
+          fullFileName,
+          imageBytes!,
+          fileOptions: supabase.FileOptions(
+            contentType: 'image/$fileExtension',
+            upsert: true,
+          ),
+        );
+
+      // Get public URL of uploaded image
+      final String imageUrl = supabaseClient.storage
+        .from('user-images')
+        .getPublicUrl(fullFileName);
+
+      print('Image uploaded successfully: $imageUrl');
+
+      // Authenticate and register user with Firebase
+      await authenticateSellerAndSignUp(imageUrl);
+
+      // Note: Loading dialog is closed in authenticateSellerAndSignUp()
+
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      print('Error uploading image: $e');
+      
+      showDialog(
+        context: context,
+        builder: (c) {
+          return AlertDialog(
+            content: Text('Error uploading image: ${e.toString()}'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  void clearForm() {
+    setState(() {
+      imageXFile = null;
+      imageBytes = null;
+      nameFieldController.clear();
+      emailFieldController.clear();
+      passwordFieldController.clear();
+      confirmPasswordFieldController.clear();
+      phoneFieldController.clear();
+      addressFieldController.clear();
+    });
+  }
+
+  Future<void> authenticateSellerAndSignUp(String imageUrl) async {
+    User? currentUser;
+    
+    try {
+      final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
+      
+      // Create user with email and password
+      await firebaseAuth.createUserWithEmailAndPassword(
+        email: emailFieldController.text.trim(),
+        password: passwordFieldController.text.trim(),
+      ).then((auth) {
+        currentUser = auth.user;
+      });
+
+      if (currentUser != null) {
+        // Save user data to Firestore
+        await saveDataToFirestore(currentUser!, imageUrl).then((value) {
+          Navigator.pop(context); // Close loading dialog
+          
+          // Navigate to home screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (c) => const HomeScreen()),
+          );
+        });
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      
+      showDialog(
+        context: context,
+        builder: (c) {
+          return AlertDialog(
+            content: Text('Error: ${e.toString()}'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                },
+                child: Text("OK"),
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  Future<void> saveDataToFirestore(User currentUser, String imageUrl) async {
+    await FirebaseFirestore.instance.collection("sellers").doc(currentUser.uid).set({
+      "sellerUID": currentUser.uid,
+      "sellerEmail": currentUser.email,
+      "sellerName": nameFieldController.text.trim(),
+      "sellerAvatarUrl": imageUrl,
+      "phone": phoneFieldController.text.trim(),
+      "address": addressFieldController.text.trim(),
+      "status": "approved",
+      "earnings": 0.0,
+      "lat": sellerCurrentPosition?.latitude ?? 0.0,
+      "lng": sellerCurrentPosition?.longitude ?? 0.0,
+    });
+
+    // save data locally using SharedPreferences 
+
+    sharedPreferences = await SharedPreferences.getInstance();
+    await sharedPreferences!.setString("sellerUID", currentUser.uid);
+    await sharedPreferences!.setString("sellerEmail", currentUser.email!.toString());
+    await sharedPreferences!.setString("sellerName", nameFieldController.text.trim());
+    await sharedPreferences!.setString("sellerAvatarUrl", imageUrl);
+    await sharedPreferences!.setString("phone", phoneFieldController.text.trim());
+    await sharedPreferences!.setString("address", addressFieldController.text.trim());
+
+    // Debug logging
+    print("=== REGISTER: SharedPreferences Saved ===");
+    print("sellerUID: ${currentUser.uid}");
+    print("sellerEmail: ${currentUser.email}");
+    print("sellerName: ${nameFieldController.text.trim()}");
+    print("=========================================");
   }
 
   getCurrentLocation() async
@@ -272,7 +665,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 backgroundColor: Colors.purple,
                 padding: EdgeInsets.symmetric(horizontal: 50, vertical: 20),
               ),
-              onPressed: () => print("Clicked"),
+              onPressed: () 
+              {
+                formValidation();
+              },
               ),
             const SizedBox( height: 30, ),
           ],
