@@ -1,8 +1,10 @@
 import 'dart:async';
-import 'dart:html';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:projectz/authentication/authScreen.dart';
+import 'package:projectz/mainScreens/homeScreen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MySplashScreen extends StatefulWidget {
   const MySplashScreen({Key? key}) : super(key: key);
@@ -13,11 +15,38 @@ class MySplashScreen extends StatefulWidget {
 
 class _MySplashScreenState extends State<MySplashScreen> {
 
-  startTimer ()
-  {
-    Timer(const Duration(seconds: 5), () async {
-      Navigator.push(context, MaterialPageRoute(builder: (c)=> const AuthScreen() ));
-    });
+  Future<void> startTimer() async {
+    // Wait for 1 second
+    await Future.delayed(const Duration(seconds: 1));
+    
+    // Check if user is logged in using SharedPreferences
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? sellerUID = prefs.getString("sellerUID");
+    String? sellerEmail = prefs.getString("sellerEmail");
+    
+    // Debug logging - check console/terminal output
+    print("=== SharedPreferences Debug ===");
+    print("sellerUID: $sellerUID");
+    print("sellerEmail: $sellerEmail");
+    print("Firebase currentUser: ${FirebaseAuth.instance.currentUser?.uid}");
+    print("==============================");
+
+    // Check if user is logged in
+    if (sellerUID != null && sellerUID.isNotEmpty) {
+      // User is logged in, go to HomeScreen
+      print("✅ User found in SharedPreferences - Going to HomeScreen");
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (c) => const HomeScreen()),
+      );
+    } else {
+      // User is not logged in, go to AuthScreen
+      print("❌ No user in SharedPreferences - Going to AuthScreen");
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (c) => const AuthScreen()),
+      );
+    }
   }
 
   @override
@@ -36,7 +65,10 @@ class _MySplashScreenState extends State<MySplashScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'images/abc.jpg',
+                'images/vastukiLogo.jpg',
+                width: 300,
+                height: 300,
+                fit: BoxFit.contain,
               ),
               const SizedBox(height: 20),
               const Padding(
