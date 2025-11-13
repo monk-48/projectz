@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:projectz/models/inventory_item.dart';
 
 class AddInventoryScreen extends StatefulWidget {
   const AddInventoryScreen({Key? key}) : super(key: key);
@@ -59,17 +60,24 @@ class _AddInventoryScreenState extends State<AddInventoryScreen> {
         throw Exception('User not authenticated');
       }
 
+      // Create InventoryItem instance
+      final item = InventoryItem(
+        id: '', // Firestore will generate the ID
+        brand: _brandController.text.trim(),
+        name: _nameController.text.trim(),
+        sku: _skuController.text.trim(),
+        seller: currentUser.uid,
+        capacity: int.parse(_capacityController.text),
+        quantity: int.parse(_quantityController.text),
+      );
+
+      // Use model's toFirestore() method to get field names
+      final data = item.toFirestore();
+      data['createdAt'] = FieldValue.serverTimestamp();
+      data['updatedAt'] = FieldValue.serverTimestamp();
+
       // Add to Firestore
-      await _firestore.collection('inventory').add({
-        'brand': _brandController.text.trim(),
-        'name': _nameController.text.trim(),
-        'sku': _skuController.text.trim(),
-        'seller': currentUser.uid,
-        'capacity': int.parse(_capacityController.text),
-        'quantity': int.parse(_quantityController.text),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await _firestore.collection('inventory').add(data);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

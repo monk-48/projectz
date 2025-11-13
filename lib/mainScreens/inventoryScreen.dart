@@ -2,45 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:projectz/mainScreens/addInventoryScreen.dart';
-
-class InventoryItem {
-  final String id;
-  final String brand;
-  final String name;
-  final String sku;
-  final String seller;
-  final int capacity;
-  final int quantity;
-
-  InventoryItem({
-    required this.id,
-    required this.brand,
-    required this.name,
-    required this.sku,
-    required this.seller,
-    required this.capacity,
-    required this.quantity,
-  });
-
-  factory InventoryItem.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return InventoryItem(
-      id: doc.id,
-      brand: data['brand'] ?? '',
-      name: data['name'] ?? '',
-      sku: data['sku'] ?? '',
-      seller: data['seller'] ?? '',
-      capacity: data['capacity'] ?? 0,
-      quantity: data['quantity'] ?? 0,
-    );
-  }
-
-  double get stockPercentage => capacity > 0 ? (quantity / capacity) * 100 : 0;
-  
-  bool get isLowStock => quantity < (capacity * 0.2);
-  
-  bool get isOutOfStock => quantity == 0;
-}
+import 'package:projectz/models/inventory_item.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({Key? key}) : super(key: key);
