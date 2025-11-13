@@ -14,7 +14,6 @@ import 'package:projectz/core/constants/app_strings.dart';
 import 'package:projectz/core/utils/validators.dart';
 import 'package:projectz/core/di/service_locator.dart';
 import 'package:projectz/features/auth/presentation/providers/auth_provider.dart';
-import 'package:projectz/global/global.dart';
 import 'package:projectz/widgets/customTextField.dart';
 import 'package:http/http.dart' as http;
 import 'package:projectz/mainScreens/homeScreen.dart';

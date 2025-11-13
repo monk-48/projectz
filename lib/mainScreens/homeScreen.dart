@@ -4,9 +4,6 @@ import 'package:projectz/core/constants/app_colors.dart';
 import 'package:projectz/core/constants/app_strings.dart';
 import 'package:projectz/core/routes/app_routes.dart';
 import 'package:projectz/features/auth/presentation/providers/auth_provider.dart';
-import 'package:projectz/mainScreens/addInventoryScreen.dart';
-import 'package:projectz/mainScreens/inventoryScreen.dart';
-import 'package:projectz/authentication/authScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -54,10 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final success = await authProvider.signOut();
       
       if (success && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AuthScreen()),
-        );
+        Navigator.pushReplacementNamed(context, AppRoutes.auth);
       } else if (mounted && authProvider.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -191,12 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         label: AppStrings.inventory,
                         color: AppColors.error,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const InventoryScreen(),
-                            ),
-                          );
+                          Navigator.pushNamed(context, AppRoutes.inventory);
                         },
                       ),
                       _buildQuickActionButton(
@@ -204,12 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         label: AppStrings.addProduct,
                         color: AppColors.success,
                         onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const AddInventoryScreen(),
-                            ),
-                          );
+                          Navigator.pushNamed(context, AppRoutes.addInventory);
                         },
                       ),
                     ],

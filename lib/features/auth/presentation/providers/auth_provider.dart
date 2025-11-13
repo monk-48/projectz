@@ -33,6 +33,16 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> isLoggedIn() async {
+    try {
+      return await _authRepository.isLoggedIn();
+    } catch (e) {
+      Logger.error('Error checking login status', error: e);
+      // Fallback to checking current user
+      return _currentUser != null;
+    }
+  }
+
   Future<bool> signIn(String email, String password) async {
     _setLoading(true);
     _clearError();

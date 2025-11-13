@@ -4,8 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:projectz/core/constants/app_colors.dart';
 import 'package:projectz/core/constants/app_strings.dart';
 import 'package:projectz/core/error/exception_handler.dart';
+import 'package:projectz/core/routes/app_routes.dart';
 import 'package:projectz/features/inventory/presentation/providers/inventory_provider.dart';
-import 'package:projectz/mainScreens/addInventoryScreen.dart';
 import 'package:projectz/models/inventory_item.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -175,10 +175,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddInventoryScreen()),
-          );
+          Navigator.pushNamed(context, AppRoutes.addInventory);
         },
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add),

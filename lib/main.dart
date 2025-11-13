@@ -8,6 +8,8 @@ import 'core/theme/app_theme.dart';
 import 'config/firebase_options.dart';
 import 'splashScreen/splashScreen.dart';
 import 'core/utils/logger.dart';
+import 'core/routes/app_routes.dart';
+import 'core/routes/app_router.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/inventory/presentation/providers/inventory_provider.dart';
 
@@ -61,7 +63,8 @@ class MyApp extends StatelessWidget {
         title: 'Seller App',
         theme: AppTheme.lightTheme,
         debugShowCheckedModeBanner: false,
-        home: const MySplashScreen(),
+        initialRoute: AppRoutes.splash,
+        onGenerateRoute: AppRouter.generateRoute,
       ),
     );
   }
