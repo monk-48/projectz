@@ -5,43 +5,43 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:projectz/core/constants/app_colors.dart';
+import 'package:projectz/core/constants/app_strings.dart';
+import 'package:projectz/core/utils/validators.dart';
+import 'package:projectz/core/di/service_locator.dart';
+import 'package:projectz/features/auth/presentation/providers/auth_provider.dart';
 import 'package:projectz/global/global.dart';
 import 'package:projectz/widgets/customTextField.dart';
 import 'package:http/http.dart' as http;
-import 'package:projectz/widgets/loadingDialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:projectz/mainScreens/homeScreen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  TextEditingController nameFieldController = TextEditingController();
-  TextEditingController emailFieldController = TextEditingController();
-  TextEditingController passwordFieldController = TextEditingController();
-  TextEditingController confirmPasswordFieldController = TextEditingController();
-  TextEditingController phoneFieldController = TextEditingController();
-  TextEditingController addressFieldController = TextEditingController();
-  
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
 
-  Position? sellerCurrentPosition;
-  List<Placemark>? sellerPlacemarks;
+  Position? _sellerCurrentPosition;
+  XFile? _imageXFile;
+  final ImagePicker _picker = ImagePicker();
+  Uint8List? _imageBytes;
 
   Future<String?> _getAddressFromCoordinatesWeb(double lat, double lng) async {
     try {
-      // Using Nominatim API (OpenStreetMap) for reverse geocoding
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1'
       );
@@ -53,628 +53,338 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        
-        // Extract address components
         final address = data['address'];
         String formattedAddress = '';
         
         if (address != null) {
           List<String> addressParts = [];
-          
           if (address['road'] != null) addressParts.add(address['road']);
           if (address['suburb'] != null) addressParts.add(address['suburb']);
           if (address['city'] != null) addressParts.add(address['city']);
           if (address['state'] != null) addressParts.add(address['state']);
           if (address['postcode'] != null) addressParts.add(address['postcode']);
           if (address['country'] != null) addressParts.add(address['country']);
-          
           formattedAddress = addressParts.join(', ');
         }
         
         return formattedAddress.isNotEmpty ? formattedAddress : data['display_name'];
       }
     } catch (e) {
-      print('Error getting address from API: $e');
+      debugPrint('Error getting address from API: $e');
     }
     return null;
   }
 
-  Future<void> formValidation() async
-  {
-    if(imageXFile == null)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please select an image."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
+  Future<void> _handleRegister() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
     }
-    else if(nameFieldController.text.trim().isEmpty)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please enter your name."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(emailFieldController.text.trim().isEmpty)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please enter your email."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(!emailFieldController.text.contains("@"))
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please enter a valid email."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(passwordFieldController.text.trim().isEmpty)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please enter a password."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(passwordFieldController.text.length < 6)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Password must be at least 6 characters."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(confirmPasswordFieldController.text.trim().isEmpty)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please confirm your password."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(passwordFieldController.text != confirmPasswordFieldController.text)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Passwords do not match."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(phoneFieldController.text.trim().isEmpty)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please enter your phone number."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else if(addressFieldController.text.trim().isEmpty)
-    {
-      showDialog(
-        context: context, 
-        builder: 
-        (c)
-        {
-          return AlertDialog(
-            content: Text("Please provide your shop address."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        }
-      );
-    }
-    else
-    {
-      // proceed with registration
-      showDialog(
-        context: context, 
-        builder: (c) {
-          return LoadingDialog(
-            message: "Registering Account",
-          );
-        }
-      );
 
-      // Upload image to Supabase and register user
-      await uploadImageAndRegister();
+    if (_imageXFile == null) {
+      _showErrorDialog(AppStrings.imageRequired);
+      return;
     }
-  }
 
-  Future<void> uploadImageAndRegister() async {
+    final authProvider = context.read<AuthProvider>();
+
+    // Step 1: Upload image
+    String? imageUrl;
     try {
-      if (imageXFile == null || imageBytes == null) {
-        Navigator.pop(context); // Close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please select an image')),
-        );
+      imageUrl = await _uploadImage();
+      if (imageUrl == null) {
+        _showErrorDialog('Failed to upload image');
         return;
       }
-
-      // Generate unique filename
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      String fileExtension = imageXFile!.name.split('.').last;
-      String fullFileName = '$fileName.$fileExtension';
-
-      // Upload to Supabase Storage
-      final supabaseClient = supabase.Supabase.instance.client;
-      
-      await supabaseClient.storage
-        .from('user-images')
-        .uploadBinary(
-          fullFileName,
-          imageBytes!,
-          fileOptions: supabase.FileOptions(
-            contentType: 'image/$fileExtension',
-            upsert: true,
-          ),
-        );
-
-      // Get public URL of uploaded image
-      final String imageUrl = supabaseClient.storage
-        .from('user-images')
-        .getPublicUrl(fullFileName);
-
-      print('Image uploaded successfully: $imageUrl');
-
-      // Authenticate and register user with Firebase
-      await authenticateSellerAndSignUp(imageUrl);
-
-      // Note: Loading dialog is closed in authenticateSellerAndSignUp()
-
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
-      print('Error uploading image: $e');
-      
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            content: Text('Error uploading image: ${e.toString()}'),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
+      _showErrorDialog('Error uploading image: $e');
+      return;
     }
-  }
 
-  void clearForm() {
-    setState(() {
-      imageXFile = null;
-      imageBytes = null;
-      nameFieldController.clear();
-      emailFieldController.clear();
-      passwordFieldController.clear();
-      confirmPasswordFieldController.clear();
-      phoneFieldController.clear();
-      addressFieldController.clear();
-    });
-  }
+    // Step 2: Sign up user
+    final signUpSuccess = await authProvider.signUp(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
-  Future<void> authenticateSellerAndSignUp(String imageUrl) async {
-    User? currentUser;
-    
-    try {
-      final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
-      
-      // Create user with email and password
-      await firebaseAuth.createUserWithEmailAndPassword(
-        email: emailFieldController.text.trim(),
-        password: passwordFieldController.text.trim(),
-      ).then((auth) {
-        currentUser = auth.user;
-      });
-
-      if (currentUser != null) {
-        // Save user data to Firestore
-        await saveDataToFirestore(currentUser!, imageUrl).then((value) {
-          Navigator.pop(context); // Close loading dialog
-          
-          // Navigate to home screen
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (c) => const HomeScreen()),
-          );
-        });
-      }
-    } catch (e) {
-      Navigator.pop(context); // Close loading dialog
-      
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            content: Text('Error: ${e.toString()}'),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
+    if (!signUpSuccess) {
+      _showErrorDialog(authProvider.errorMessage ?? AppStrings.unknownError);
+      return;
     }
-  }
 
-  Future<void> saveDataToFirestore(User currentUser, String imageUrl) async {
-    await FirebaseFirestore.instance.collection("sellers").doc(currentUser.uid).set({
-      "sellerUID": currentUser.uid,
-      "sellerEmail": currentUser.email,
-      "sellerName": nameFieldController.text.trim(),
+    // Step 3: Create seller profile
+    final profileData = {
+      "sellerUID": authProvider.currentUser!.uid,
+      "sellerEmail": authProvider.currentUser!.email,
+      "sellerName": _nameController.text.trim(),
       "sellerAvatarUrl": imageUrl,
-      "phone": phoneFieldController.text.trim(),
-      "address": addressFieldController.text.trim(),
+      "phone": _phoneController.text.trim(),
+      "address": _addressController.text.trim(),
       "status": "approved",
       "earnings": 0.0,
-      "lat": sellerCurrentPosition?.latitude ?? 0.0,
-      "lng": sellerCurrentPosition?.longitude ?? 0.0,
-    });
+      "lat": _sellerCurrentPosition?.latitude ?? 0.0,
+      "lng": _sellerCurrentPosition?.longitude ?? 0.0,
+    };
 
-    // save data locally using SharedPreferences 
+    final profileSuccess = await authProvider.createSellerProfile(profileData);
 
-    sharedPreferences = await SharedPreferences.getInstance();
-    await sharedPreferences!.setString("sellerUID", currentUser.uid);
-    await sharedPreferences!.setString("sellerEmail", currentUser.email!.toString());
-    await sharedPreferences!.setString("sellerName", nameFieldController.text.trim());
-    await sharedPreferences!.setString("sellerAvatarUrl", imageUrl);
-    await sharedPreferences!.setString("phone", phoneFieldController.text.trim());
-    await sharedPreferences!.setString("address", addressFieldController.text.trim());
-
-    // Debug logging
-    print("=== REGISTER: SharedPreferences Saved ===");
-    print("sellerUID: ${currentUser.uid}");
-    print("sellerEmail: ${currentUser.email}");
-    print("sellerName: ${nameFieldController.text.trim()}");
-    print("=========================================");
+    if (mounted) {
+      if (profileSuccess) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        _showErrorDialog(authProvider.errorMessage ?? AppStrings.unknownError);
+      }
+    }
   }
 
-  getCurrentLocation() async
-  {    
+  Future<String?> _uploadImage() async {
+    if (_imageXFile == null || _imageBytes == null) {
+      return null;
+    }
+
     try {
-      Position newPosition = await Geolocator.getCurrentPosition(
+      final storageService = ServiceLocator().storageRemoteDataSource;
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.${_imageXFile!.name.split('.').last}';
+      final imageUrl = await storageService.uploadImage(
+        _imageBytes!,
+        fileName,
+        'user-images',
+      );
+      return imageUrl;
+    } catch (e) {
+      debugPrint('Error uploading image: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      sellerCurrentPosition = newPosition;
+      setState(() {
+        _sellerCurrentPosition = position;
+      });
 
       if (kIsWeb) {
-        // On web, use Nominatim API for reverse geocoding
-        addressFieldController.text = 'Loading address...';
-        
-        String? address = await _getAddressFromCoordinatesWeb(
-          newPosition.latitude,
-          newPosition.longitude,
+        _addressController.text = 'Loading address...';
+        final address = await _getAddressFromCoordinatesWeb(
+          position.latitude,
+          position.longitude,
         );
         
-        if (address != null && address.isNotEmpty) {
-          addressFieldController.text = address;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Location captured successfully!')),
-          );
-        } else {
-          // Fallback to coordinates if API fails
-          String webAddress = 'Lat: ${newPosition.latitude.toStringAsFixed(6)}, Lng: ${newPosition.longitude.toStringAsFixed(6)}';
-          addressFieldController.text = webAddress;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Got coordinates (address lookup failed)')),
-          );
+        if (mounted) {
+          if (address != null && address.isNotEmpty) {
+            setState(() {
+              _addressController.text = address;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location captured successfully!')),
+            );
+          } else {
+            final webAddress = 'Lat: ${position.latitude.toStringAsFixed(6)}, Lng: ${position.longitude.toStringAsFixed(6)}';
+            setState(() {
+              _addressController.text = webAddress;
+            });
+          }
         }
       } else {
-        // On mobile, use geocoding
-        sellerPlacemarks = await placemarkFromCoordinates(
-          sellerCurrentPosition!.latitude,
-          sellerCurrentPosition!.longitude,
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
         );
 
-        if (sellerPlacemarks != null && sellerPlacemarks!.isNotEmpty) {
-          Placemark pMark = sellerPlacemarks![0];
-
-          String completeAddressInfo =
-              '${pMark.subThoroughfare} ${pMark.thoroughfare}, ${pMark.subLocality} ${pMark.locality}, ${pMark.subAdministrativeArea}, ${pMark.administrativeArea} ${pMark.postalCode}, ${pMark.country}';
-
-          print('Complete Address Info: ' + completeAddressInfo);
-
-          String specificAddress = '${pMark.subLocality} ${pMark.locality}, ${pMark.administrativeArea} ${pMark.postalCode}, ${pMark.country}';
-
-          addressFieldController.text = specificAddress;
+        if (placemarks.isNotEmpty && mounted) {
+          final placemark = placemarks[0];
+          final address = '${placemark.subLocality} ${placemark.locality}, ${placemark.administrativeArea} ${placemark.postalCode}, ${placemark.country}';
+          setState(() {
+            _addressController.text = address;
+          });
         }
       }
     } catch (e) {
-      print('Error getting location: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error getting location: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error getting location: $e')),
+        );
+      }
     }
   }
 
-  XFile? imageXFile;
-  final ImagePicker _picker = ImagePicker();
-  Uint8List? imageBytes;
-
-  Future<void> _getImage() async
-  {
-    imageXFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (imageXFile != null) {
-      imageBytes = await imageXFile!.readAsBytes();
+  Future<void> _getImage() async {
+    final image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        _imageXFile = image;
+      });
+      _imageBytes = await image.readAsBytes();
     }
-    setState(() {});
   }
 
   ImageProvider? _getImageProvider() {
-    if (imageXFile == null) return null;
+    if (_imageXFile == null) return null;
     
     if (kIsWeb) {
-      // For web platform, use MemoryImage with bytes
-      return imageBytes != null ? MemoryImage(imageBytes!) : null;
+      return _imageBytes != null ? MemoryImage(_imageBytes!) : null;
     } else {
-      // For mobile platforms (iOS/Android), use FileImage
       try {
-        return FileImage(File(imageXFile!.path));
+        return FileImage(File(_imageXFile!.path));
       } catch (e) {
-        // Fallback to MemoryImage if File is not available
-        return imageBytes != null ? MemoryImage(imageBytes!) : null;
+        return _imageBytes != null ? MemoryImage(_imageBytes!) : null;
       }
     }
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(AppStrings.error),
+        content: Text(message),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Container(
-        child: Column(
-          mainAxisSize:  MainAxisSize.max,
-          children: [
-            const SizedBox (height: 10,),
-            InkWell(
-              onTap: () {
-                _getImage();
-              },
-              child: CircleAvatar(
-                radius: MediaQuery.of(context).size.width * 0.20,
-                backgroundColor: Colors.white,
-                backgroundImage: _getImageProvider(),
-                child: imageXFile == null
-                    ? 
-                    Icon(
-                      Icons.add_photo_alternate,
-                      size: MediaQuery.of(context).size.width * 0.20,
-                      color: Colors.grey,
-                    )
-                    : null,
-
-              ),
-            ),
-            const SizedBox (height: 10,),
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  CustomTextField(
-                    controller: nameFieldController,
-                    data: Icons.person,
-                    hintText: 'Name',
-                    isObsecure: false,
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        return SingleChildScrollView(
+          child: Container(
+            child: Column(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: _getImage,
+                  child: CircleAvatar(
+                    radius: MediaQuery.of(context).size.width * 0.20,
+                    backgroundColor: Colors.white,
+                    backgroundImage: _getImageProvider(),
+                    child: _imageXFile == null
+                        ? Icon(
+                            Icons.add_photo_alternate,
+                            size: MediaQuery.of(context).size.width * 0.20,
+                            color: Colors.grey,
+                          )
+                        : null,
                   ),
-                  CustomTextField(
-                    controller: emailFieldController,
-                    data: Icons.email,
-                    hintText: 'Email',
-                    isObsecure: false,
-                  ),
-                  CustomTextField(
-                    controller: passwordFieldController,
-                    data: Icons.lock,
-                    hintText: 'Password',
-                  ),
-                  CustomTextField(
-                    controller: confirmPasswordFieldController,
-                    data: Icons.lock,
-                    hintText: 'Confirm Password',
-                  ),
-                  CustomTextField(
-                    controller: phoneFieldController,
-                    data: Icons.phone,
-                    hintText: 'Phone',
-                    isObsecure: false,
-                  ),
-                  CustomTextField(
-                    controller: addressFieldController,
-                    data: Icons.location_city,
-                    hintText: 'Shop Address',
-                    isObsecure: false,
-                    enabled: true,
-                  ),
-                  Container(
-                    width: 400,
-                    height: 40,
-                    alignment: Alignment.center,
-                    child: ElevatedButton.icon(
-                      label: Text(
-                        "Get my location",
-                        style: TextStyle(color: Colors.white ),
-                      ),
-                        
-                        
-                      icon: Icon(
-                        Icons.location_on,
-                        color: Colors.white,
-                      ),
-                      onPressed: () {
-                        getCurrentLocation();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.cyan,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                    ),
-
-                  )
-                ],
-              ),
-               
-            ),
-            const SizedBox( height: 30, ),
-            ElevatedButton(
-              child: const Text(
-                "Sign Up",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
                 ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                padding: EdgeInsets.symmetric(horizontal: 50, vertical: 20),
-              ),
-              onPressed: () 
-              {
-                formValidation();
-              },
-              ),
-            const SizedBox( height: 30, ),
-          ],
-          
-        ),
-      ),
+                const SizedBox(height: 10),
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      CustomTextField(
+                        controller: _nameController,
+                        data: Icons.person,
+                        hintText: AppStrings.name,
+                        isObsecure: false,
+                      ),
+                      CustomTextField(
+                        controller: _emailController,
+                        data: Icons.email,
+                        hintText: AppStrings.email,
+                        isObsecure: false,
+                      ),
+                      CustomTextField(
+                        controller: _passwordController,
+                        data: Icons.lock,
+                        hintText: AppStrings.password,
+                      ),
+                      CustomTextField(
+                        controller: _confirmPasswordController,
+                        data: Icons.lock,
+                        hintText: AppStrings.confirmPassword,
+                      ),
+                      CustomTextField(
+                        controller: _phoneController,
+                        data: Icons.phone,
+                        hintText: AppStrings.phone,
+                        isObsecure: false,
+                      ),
+                      CustomTextField(
+                        controller: _addressController,
+                        data: Icons.location_city,
+                        hintText: AppStrings.shopAddress,
+                        isObsecure: false,
+                        enabled: true,
+                      ),
+                      Container(
+                        width: 400,
+                        height: 40,
+                        alignment: Alignment.center,
+                        child: ElevatedButton.icon(
+                          label: const Text(
+                            AppStrings.getMyLocation,
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          icon: const Icon(
+                            Icons.location_on,
+                            color: Colors.white,
+                          ),
+                          onPressed: _getCurrentLocation,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.secondary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+                ElevatedButton(
+                  onPressed: authProvider.isLoading ? null : _handleRegister,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+                  ),
+                  child: authProvider.isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          "Sign Up",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 30),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

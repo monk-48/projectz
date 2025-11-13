@@ -57,10 +57,10 @@ class AuthScreen extends StatelessWidget {
               tileMode: TileMode.clamp,
             ),
           ),
-          child: const TabBarView(
+          child: TabBarView(
             children: [
-              loginScreen(),
-              RegisterScreen(),
+              const LoginScreen(),
+              const RegisterScreen(),
             ],
           ),
         ),
