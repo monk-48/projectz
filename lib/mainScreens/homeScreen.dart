@@ -1,78 +1,66 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:projectz/authentication/authScreen.dart';
+import 'package:provider/provider.dart';
+import 'package:projectz/core/constants/app_colors.dart';
+import 'package:projectz/core/constants/app_strings.dart';
+import 'package:projectz/core/routes/app_routes.dart';
+import 'package:projectz/features/auth/presentation/providers/auth_provider.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String sellerName = "";
-  String sellerEmail = "";
-  String sellerImageUrl = "";
-  bool isLoading = true;
-
   @override
   void initState() {
     super.initState();
-    loadSellerInfo();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthProvider>().loadSellerData();
+    });
   }
 
-  Future<void> loadSellerInfo() async {
-    try {
-      User? currentUser = FirebaseAuth.instance.currentUser;
-      
-      if (currentUser != null) {
-        DocumentSnapshot sellerSnapshot = await FirebaseFirestore.instance
-            .collection("sellers")
-            .doc(currentUser.uid)
-            .get();
-
-        if (sellerSnapshot.exists) {
-          setState(() {
-            sellerName = sellerSnapshot.get("sellerName") ?? "";
-            sellerEmail = sellerSnapshot.get("sellerEmail") ?? "";
-            sellerImageUrl = sellerSnapshot.get("sellerAvatarUrl") ?? "";
-            isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      print("Error loading seller info: $e");
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  Future<void> signOut() async {
-    // Debug logging - before clear
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    print("=== LOGOUT: Before Clear ===");
-    print("sellerUID: ${prefs.getString("sellerUID")}");
-    print("============================");
-    
-    // Clear SharedPreferences
-    await prefs.clear();
-    
-    // Debug logging - after clear
-    print("=== LOGOUT: After Clear ===");
-    print("sellerUID: ${prefs.getString("sellerUID")}");
-    print("===========================");
-    
-    // Sign out from Firebase
-    await FirebaseAuth.instance.signOut();
-    
-    // Navigate to AuthScreen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (c) => const AuthScreen()),
+  Future<void> _handleSignOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(AppStrings.logout),
+        content: const Text(AppStrings.logoutConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(AppStrings.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text(
+              AppStrings.logout,
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
+
+    if (confirmed == true && mounted) {
+      final authProvider = context.read<AuthProvider>();
+      final success = await authProvider.signOut();
+      
+      if (success && mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.auth);
+      } else if (mounted && authProvider.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authProvider.errorMessage!),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -83,204 +71,171 @@ class _HomeScreenState extends State<HomeScreen> {
           'Seller Home',
           style: TextStyle(color: Colors.white),
         ),
-        backgroundColor: Colors.purple,
+        backgroundColor: AppColors.primary,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (c) {
-                  return AlertDialog(
-                    title: const Text("Logout"),
-                    content: const Text("Are you sure you want to logout?"),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(c),
-                        child: const Text("Cancel"),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(c);
-                          signOut();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                        ),
-                        child: const Text(
-                          "Logout",
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
+            onPressed: _handleSignOut,
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 30),
-                    
-                    // Profile Image
-                    CircleAvatar(
-                      radius: 80,
-                      backgroundColor: Colors.purple.shade100,
-                      backgroundImage: sellerImageUrl.isNotEmpty
-                          ? NetworkImage(sellerImageUrl)
-                          : null,
-                      child: sellerImageUrl.isEmpty
-                          ? const Icon(
-                              Icons.person,
-                              size: 80,
-                              color: Colors.purple,
-                            )
-                          : null,
+      body: Consumer<AuthProvider>(
+        builder: (context, authProvider, _) {
+          if (authProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 30),
+                  
+                  // Profile Image
+                  CircleAvatar(
+                    radius: 80,
+                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    backgroundImage: authProvider.sellerImageUrl.isNotEmpty
+                        ? NetworkImage(authProvider.sellerImageUrl)
+                        : null,
+                    child: authProvider.sellerImageUrl.isEmpty
+                        ? Icon(
+                            Icons.person,
+                            size: 80,
+                            color: AppColors.primary,
+                          )
+                        : null,
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Seller Name
+                  Text(
+                    authProvider.sellerName,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
-                    
-                    const SizedBox(height: 20),
-                    
-                    // Seller Name
-                    Text(
-                      sellerName,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+                  ),
+                  
+                  const SizedBox(height: 10),
+                  
+                  // Seller Email
+                  Text(
+                    authProvider.sellerEmail,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: AppColors.textSecondary,
                     ),
-                    
-                    const SizedBox(height: 10),
-                    
-                    // Seller Email
-                    Text(
-                      sellerEmail,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey.shade600,
-                      ),
+                  ),
+                  
+                  const SizedBox(height: 40),
+                  
+                  // Welcome Card
+                  Card(
+                    elevation: 5,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
                     ),
-                    
-                    const SizedBox(height: 40),
-                    
-                    // Welcome Card
-                    Card(
-                      elevation: 5,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.all(30),
-                        width: double.infinity,
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.store,
-                              size: 60,
-                              color: Colors.purple.shade300,
+                    child: Container(
+                      padding: const EdgeInsets.all(30),
+                      width: double.infinity,
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.store,
+                            size: 60,
+                            color: AppColors.primary.withOpacity(0.7),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            AppStrings.welcome,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
                             ),
-                            const SizedBox(height: 20),
-                            const Text(
-                              'Welcome to Your Seller Dashboard!',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
+                          ),
+                          const SizedBox(height: 15),
+                          Text(
+                            AppStrings.welcomeSubtitle,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
                             ),
-                            const SizedBox(height: 15),
-                            Text(
-                              'Your account has been successfully created. Start managing your products and orders.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                    
-                    const SizedBox(height: 30),
-                    
-                    // Quick Action Buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildQuickActionButton(
-                          icon: Icons.add_box,
-                          label: 'Add Product',
-                          color: Colors.green,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Add Product feature coming soon!'),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildQuickActionButton(
-                          icon: Icons.list_alt,
-                          label: 'My Orders',
-                          color: Colors.orange,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('My Orders feature coming soon!'),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 20),
-                    
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildQuickActionButton(
-                          icon: Icons.insights,
-                          label: 'Analytics',
-                          color: Colors.blue,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Analytics feature coming soon!'),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildQuickActionButton(
-                          icon: Icons.settings,
-                          label: 'Settings',
-                          color: Colors.grey,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Settings feature coming soon!'),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                  
+                  const SizedBox(height: 30),
+                  
+                  // Quick Action Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildQuickActionButton(
+                        icon: Icons.inventory,
+                        label: AppStrings.inventory,
+                        color: AppColors.error,
+                        onTap: () {
+                          Navigator.pushNamed(context, AppRoutes.inventory);
+                        },
+                      ),
+                      _buildQuickActionButton(
+                        icon: Icons.add_box,
+                        label: AppStrings.addProduct,
+                        color: AppColors.success,
+                        onTap: () {
+                          Navigator.pushNamed(context, AppRoutes.addInventory);
+                        },
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildQuickActionButton(
+                        icon: Icons.list_alt,
+                        label: AppStrings.myOrders,
+                        color: AppColors.warning,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(AppStrings.comingSoon),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildQuickActionButton(
+                        icon: Icons.insights,
+                        label: AppStrings.analytics,
+                        color: AppColors.info,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(AppStrings.comingSoon),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
+          );
+        },
+      ),
     );
   }
 
