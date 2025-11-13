@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:projectz/mainScreens/addInventoryScreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:projectz/authentication/authScreen.dart';
+import 'package:projectz/mainScreens/inventoryScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -51,28 +53,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> signOut() async {
-    // Debug logging - before clear
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    print("=== LOGOUT: Before Clear ===");
-    print("sellerUID: ${prefs.getString("sellerUID")}");
-    print("============================");
-    
-    // Clear SharedPreferences
-    await prefs.clear();
-    
-    // Debug logging - after clear
-    print("=== LOGOUT: After Clear ===");
-    print("sellerUID: ${prefs.getString("sellerUID")}");
-    print("===========================");
-    
-    // Sign out from Firebase
-    await FirebaseAuth.instance.signOut();
-    
-    // Navigate to AuthScreen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (c) => const AuthScreen()),
-    );
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      await FirebaseAuth.instance.signOut();
+      
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (c) => const AuthScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error signing out: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -220,17 +218,34 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         _buildQuickActionButton(
-                          icon: Icons.add_box,
-                          label: 'Add Product',
-                          color: Colors.green,
+                          icon: Icons.inventory,
+                          label: 'Inventory',
+                          color: const Color.fromARGB(255, 237, 42, 42),
                           onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Add Product feature coming soon!'),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const InventoryScreen(),
                               ),
                             );
                           },
                         ),
+                        _buildQuickActionButton(
+                          icon: Icons.add_box,
+                          label: 'Add Product',
+                          color: Colors.green,
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const AddInventoryScreen()));
+                          },
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
                         _buildQuickActionButton(
                           icon: Icons.list_alt,
                           label: 'My Orders',
@@ -243,14 +258,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                         ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 20),
-                    
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
                         _buildQuickActionButton(
                           icon: Icons.insights,
                           label: 'Analytics',
@@ -259,18 +266,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Analytics feature coming soon!'),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildQuickActionButton(
-                          icon: Icons.settings,
-                          label: 'Settings',
-                          color: Colors.grey,
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Settings feature coming soon!'),
                               ),
                             );
                           },
