@@ -1,334 +1,142 @@
 import 'package:flutter/material.dart';
-import 'package:projectz/widgets/customTextField.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:projectz/widgets/loadingDialog.dart';
+import 'package:provider/provider.dart';
+import 'package:projectz/core/constants/app_colors.dart';
+import 'package:projectz/core/constants/app_strings.dart';
+import 'package:projectz/core/utils/validators.dart';
+import 'package:projectz/features/auth/presentation/providers/auth_provider.dart';
 import 'package:projectz/mainScreens/homeScreen.dart';
+import 'package:projectz/widgets/customTextField.dart';
 
-class loginScreen extends StatefulWidget {
-  const loginScreen({Key? key}) : super(key: key);
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<loginScreen> createState() => _loginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _loginScreenState extends State<loginScreen> {
-
+class _LoginScreenState extends State<LoginScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  TextEditingController emailFieldController = TextEditingController();
-  TextEditingController passwordFieldController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _obscurePassword = true;
 
-  Future<void> formValidation() async {
-    if (emailFieldController.text.trim().isEmpty) {
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            title: const Text("Error"),
-            content: const Text("Please enter your email."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
-    } else if (!emailFieldController.text.contains("@")) {
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            title: const Text("Error"),
-            content: const Text("Please enter a valid email."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
-    } else if (passwordFieldController.text.trim().isEmpty) {
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            title: const Text("Error"),
-            content: const Text("Please enter your password."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
-    } else if (passwordFieldController.text.length < 6) {
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            title: const Text("Error"),
-            content: const Text("Password must be at least 6 characters."),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
-    } else {
-      // Proceed with login
-      await signInUser();
-    }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  Future<void> signInUser() async {
-    showDialog(
-      context: context,
-      builder: (c) {
-        return LoadingDialog(
-          message: "Checking credentials...",
-        );
-      },
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.signIn(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
     );
 
-    User? currentUser;
-
-    try {
-      final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
-
-      await firebaseAuth.signInWithEmailAndPassword(
-        email: emailFieldController.text.trim(),
-        password: passwordFieldController.text.trim(),
-      ).then((auth) {
-        currentUser = auth.user;
-      });
-
-      if (currentUser != null) {
-        // Check if user exists in sellers collection
-        await checkIfSellerRecordExists(currentUser!);
-      }
-    } on FirebaseAuthException catch (e) {
-      Navigator.pop(context); // Close loading dialog
-
-      String errorMessage = "";
-      
-      if (e.code == 'user-not-found') {
-        errorMessage = "No user found with this email.";
-      } else if (e.code == 'wrong-password') {
-        errorMessage = "Incorrect password. Please try again.";
-      } else if (e.code == 'invalid-email') {
-        errorMessage = "Invalid email format.";
-      } else if (e.code == 'user-disabled') {
-        errorMessage = "This account has been disabled.";
-      } else if (e.code == 'too-many-requests') {
-        errorMessage = "Too many login attempts. Please try again later.";
-      } else {
-        errorMessage = "Login failed: ${e.message}";
-      }
-
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            title: const Text("Login Error"),
-            content: Text(errorMessage),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                ),
-                child: const Text(
-                  "OK",
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-    } catch (e) {
-      Navigator.pop(context); // Close loading dialog
-
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            title: const Text("Error"),
-            content: Text("An unexpected error occurred: ${e.toString()}"),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
-    }
-  }
-
-  Future<void> checkIfSellerRecordExists(User currentUser) async {
-    try {
-      DocumentSnapshot sellerSnapshot = await FirebaseFirestore.instance
-          .collection("sellers")
-          .doc(currentUser.uid)
-          .get();
-
-      if (sellerSnapshot.exists) {
-        // Save user data to SharedPreferences
-        await saveUserDataToSharedPreferences(currentUser, sellerSnapshot);
-
-        Navigator.pop(context); // Close loading dialog
-
-        // Navigate to HomeScreen
+    if (mounted) {
+      if (success) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (c) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
       } else {
-        Navigator.pop(context); // Close loading dialog
-
-        // User not found in sellers collection
-        await FirebaseAuth.instance.signOut();
-
-        showDialog(
-          context: context,
-          builder: (c) {
-            return AlertDialog(
-              title: const Text("No Record Found"),
-              content: const Text(
-                  "This account is not registered as a seller. Please sign up first."),
-              actions: [
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(c);
-                  },
-                  child: const Text("OK"),
-                ),
-              ],
-            );
-          },
-        );
+        _showErrorDialog(authProvider.errorMessage ?? AppStrings.unknownError);
       }
-    } catch (e) {
-      Navigator.pop(context); // Close loading dialog
-
-      showDialog(
-        context: context,
-        builder: (c) {
-          return AlertDialog(
-            title: const Text("Error"),
-            content: Text("Error checking user record: ${e.toString()}"),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(c);
-                },
-                child: const Text("OK"),
-              ),
-            ],
-          );
-        },
-      );
     }
   }
 
-  Future<void> saveUserDataToSharedPreferences(
-      User currentUser, DocumentSnapshot sellerSnapshot) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    await prefs.setString("sellerUID", currentUser.uid);
-    await prefs.setString("sellerEmail", currentUser.email ?? "");
-    await prefs.setString(
-        "sellerName", sellerSnapshot.get("sellerName") ?? "");
-    await prefs.setString(
-        "sellerAvatarUrl", sellerSnapshot.get("sellerAvatarUrl") ?? "");
-    await prefs.setString("phone", sellerSnapshot.get("phone") ?? "");
-    await prefs.setString("address", sellerSnapshot.get("address") ?? "");
-
-    // Debug logging
-    print("=== LOGIN: SharedPreferences Saved ===");
-    print("sellerUID: ${currentUser.uid}");
-    print("sellerEmail: ${currentUser.email}");
-    print("sellerName: ${sellerSnapshot.get("sellerName")}");
-    print("=====================================");
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(AppStrings.loginError),
+        content: Text(message),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text(
+              "OK",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            Container(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Image.asset(
-                  'images/seller.png',
-                  height: 270,
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        return SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Container(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Image.asset(
+                    'images/seller.png',
+                    height: 270,
+                  ),
                 ),
               ),
-            ),
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  CustomTextField(
-                    controller: emailFieldController,
-                    data: Icons.email,
-                    hintText: 'Email',
-                    isObsecure: false,
-                  ),
-                  CustomTextField(
-                    controller: passwordFieldController,
-                    data: Icons.lock,
-                    hintText: 'Password',
-                  ),
-                ],
-              ),
-            ),
-            ElevatedButton(
-              child: const Text(
-                "LogIn",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
+              Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    CustomTextField(
+                      controller: _emailController,
+                      data: Icons.email,
+                      hintText: AppStrings.email,
+                      isObsecure: false,
+                    ),
+                    CustomTextField(
+                      controller: _passwordController,
+                      data: Icons.lock,
+                      hintText: AppStrings.password,
+                      isObsecure: _obscurePassword,
+                    ),
+                  ],
                 ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+              ElevatedButton(
+                onPressed: authProvider.isLoading ? null : _handleLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+                ),
+                child: authProvider.isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text(
+                        AppStrings.login,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                        ),
+                      ),
               ),
-              onPressed: () {
-                formValidation();
-              },
-            ),
-            const SizedBox( height: 30, ),
-          ],
-        ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        );
+      },
     );
   }
 }

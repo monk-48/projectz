@@ -1,58 +1,60 @@
 import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:projectz/authentication/authScreen.dart';
-import 'package:projectz/mainScreens/homeScreen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:projectz/core/constants/app_strings.dart';
+import 'package:projectz/core/routes/app_routes.dart';
+import 'package:projectz/core/utils/logger.dart';
+import 'package:projectz/features/auth/presentation/providers/auth_provider.dart';
 
 class MySplashScreen extends StatefulWidget {
-  const MySplashScreen({Key? key}) : super(key: key);
+  const MySplashScreen({super.key});
 
   @override
   State<MySplashScreen> createState() => _MySplashScreenState();
 }
 
 class _MySplashScreenState extends State<MySplashScreen> {
-
-  Future<void> startTimer() async {
-    // Wait for 1 second
-    await Future.delayed(const Duration(seconds: 1));
-    
-    // Check if user is logged in using SharedPreferences
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? sellerUID = prefs.getString("sellerUID");
-    String? sellerEmail = prefs.getString("sellerEmail");
-    
-    // Debug logging - check console/terminal output
-    print("=== SharedPreferences Debug ===");
-    print("sellerUID: $sellerUID");
-    print("sellerEmail: $sellerEmail");
-    print("Firebase currentUser: ${FirebaseAuth.instance.currentUser?.uid}");
-    print("==============================");
-
-    // Check if user is logged in
-    if (sellerUID != null && sellerUID.isNotEmpty) {
-      // User is logged in, go to HomeScreen
-      print("✅ User found in SharedPreferences - Going to HomeScreen");
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (c) => const HomeScreen()),
-      );
-    } else {
-      // User is not logged in, go to AuthScreen
-      print("❌ No user in SharedPreferences - Going to AuthScreen");
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (c) => const AuthScreen()),
-      );
-    }
-  }
-
   @override
   void initState() {
     super.initState();
-    startTimer();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    // Wait for 1 second for splash screen display
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+    
+    // Check if user is logged in
+    // Wait a bit for AuthProvider to initialize
+    await Future.delayed(const Duration(milliseconds: 100));
+    
+    final isLoggedIn = await authProvider.isLoggedIn();
+    final hasCurrentUser = authProvider.currentUser != null;
+    
+    Logger.info('Splash screen: User logged in status: $isLoggedIn');
+    Logger.debug('Splash screen: Current user: ${authProvider.currentUser?.uid}');
+
+    if (!mounted) return;
+
+    if (isLoggedIn && hasCurrentUser) {
+      // User is logged in, load seller data and go to HomeScreen
+      Logger.info('User found - Navigating to HomeScreen');
+      await authProvider.loadSellerData();
+      
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.home);
+      }
+    } else {
+      // User is not logged in, go to AuthScreen
+      Logger.info('No user found - Navigating to AuthScreen');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.auth);
+      }
+    }
   }
 
   @override
@@ -74,7 +76,7 @@ class _MySplashScreenState extends State<MySplashScreen> {
               const Padding(
                 padding: EdgeInsets.all(18.0),
                 child: Text(
-                  'Welcome to Seller App',
+                  AppStrings.welcome,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 40,
