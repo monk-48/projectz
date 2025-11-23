@@ -8,6 +8,10 @@ class InventoryItem {
   final String seller;
   final int capacity;
   final int quantity;
+  final double pricePerSku;
+  final String? skuUnit;
+  final String? productType;
+  final String? imageUrl;
 
   InventoryItem({
     required this.id,
@@ -17,6 +21,10 @@ class InventoryItem {
     required this.seller,
     required this.capacity,
     required this.quantity,
+    this.pricePerSku = 0.0,
+    this.skuUnit,
+    this.productType,
+    this.imageUrl,
   });
 
   factory InventoryItem.fromFirestore(DocumentSnapshot doc) {
@@ -29,6 +37,10 @@ class InventoryItem {
       seller: data['seller'] ?? '',
       capacity: data['capacity'] ?? 0,
       quantity: data['quantity'] ?? 0,
+      pricePerSku: (data['pricePerSku'] ?? 0.0).toDouble(),
+      skuUnit: data['skuUnit'],
+      productType: data['productType'],
+      imageUrl: data['imageUrl'],
     );
   }
 
@@ -41,6 +53,10 @@ class InventoryItem {
       'seller': seller,
       'capacity': capacity,
       'quantity': quantity,
+      'pricePerSku': pricePerSku,
+      'skuUnit': skuUnit,
+      'productType': productType,
+      'imageUrl': imageUrl,
     };
   }
 
@@ -60,6 +76,10 @@ class InventoryItem {
     String? seller,
     int? capacity,
     int? quantity,
+    double? pricePerSku,
+    String? skuUnit,
+    String? productType,
+    String? imageUrl,
   }) {
     return InventoryItem(
       id: id ?? this.id,
@@ -69,6 +89,10 @@ class InventoryItem {
       seller: seller ?? this.seller,
       capacity: capacity ?? this.capacity,
       quantity: quantity ?? this.quantity,
+      pricePerSku: pricePerSku ?? this.pricePerSku,
+      skuUnit: skuUnit ?? this.skuUnit,
+      productType: productType ?? this.productType,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 }
