@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:projectz/mainScreens/addInventoryScreen.dart';
+import 'package:projectz/mainScreens/addProduct/selectTypeScreen.dart';
 import 'package:projectz/models/inventory_item.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -14,7 +14,7 @@ class InventoryScreen extends StatefulWidget {
 class _InventoryScreenState extends State<InventoryScreen> {
   late FirebaseFirestore _firestore;
   late FirebaseAuth _auth;
-  
+
   String _sortBy = 'name'; // name, brand, quantity, sku
   bool _isAscending = true;
   String _searchQuery = '';
@@ -51,22 +51,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
         .where('seller', isEqualTo: currentUser.uid)
         .snapshots()
         .map((snapshot) {
-          // Fetch real data from Firestore
-          List<InventoryItem> items = snapshot.docs
-              .map((doc) => InventoryItem.fromFirestore(doc))
-              .toList();
+      // Fetch real data from Firestore
+      List<InventoryItem> items =
+          snapshot.docs.map((doc) => InventoryItem.fromFirestore(doc)).toList();
 
-          // Add dummy item for visualization at the beginning
-          items.insert(0, getDummyItem());
+      // Add dummy item for visualization at the beginning
+      items.insert(0, getDummyItem());
 
-          // Apply filtering
-          items = _applyFilters(items);
+      // Apply filtering
+      items = _applyFilters(items);
 
-          // Apply sorting
-          items = _applySorting(items);
+      // Apply sorting
+      items = _applySorting(items);
 
-          return items;
-        });
+      return items;
+    });
   }
 
   List<InventoryItem> _applyFilters(List<InventoryItem> items) {
@@ -83,7 +82,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     // Status filter
     switch (_filterByStatus) {
       case 'low':
-        items = items.where((item) => item.isLowStock && !item.isOutOfStock).toList();
+        items = items
+            .where((item) => item.isLowStock && !item.isOutOfStock)
+            .toList();
         break;
       case 'out_of_stock':
         items = items.where((item) => item.isOutOfStock).toList();
@@ -108,15 +109,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
             : b.quantity.compareTo(a.quantity));
         break;
       case 'sku':
-        items.sort((a, b) => _isAscending
-            ? a.sku.compareTo(b.sku)
-            : b.sku.compareTo(a.sku));
+        items.sort((a, b) =>
+            _isAscending ? a.sku.compareTo(b.sku) : b.sku.compareTo(a.sku));
         break;
       case 'name':
       default:
-        items.sort((a, b) => _isAscending
-            ? a.name.compareTo(b.name)
-            : b.name.compareTo(a.name));
+        items.sort((a, b) =>
+            _isAscending ? a.name.compareTo(b.name) : b.name.compareTo(a.name));
         break;
     }
     return items;
@@ -248,7 +247,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ),
             ),
           ),
-          
+
           // Filter and Sort Chips
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -262,19 +261,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         label: const Text('Filter'),
                         onSelected: (_) => _showFilterOptions(),
                         avatar: _filterByStatus != 'all'
-                            ? const Icon(Icons.check, color: Colors.white, size: 18)
+                            ? const Icon(Icons.check,
+                                color: Colors.white, size: 18)
                             : null,
                         backgroundColor: _filterByStatus != 'all'
                             ? Colors.purple
                             : Colors.grey.shade300,
                         labelStyle: TextStyle(
-                          color: _filterByStatus != 'all' ? Colors.white : Colors.black,
+                          color: _filterByStatus != 'all'
+                              ? Colors.white
+                              : Colors.black,
                         ),
                       ),
                       FilterChip(
                         label: const Text('Sort'),
                         onSelected: (_) => _showSortOptions(),
-                        avatar: const Icon(Icons.unfold_more, color: Colors.white, size: 18),
+                        avatar: const Icon(Icons.unfold_more,
+                            color: Colors.white, size: 18),
                         backgroundColor: Colors.purple,
                         labelStyle: const TextStyle(color: Colors.white),
                       ),
@@ -285,7 +288,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          
+
           // Inventory List
           Expanded(
             child: StreamBuilder<List<InventoryItem>>(
@@ -300,7 +303,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                        const Icon(Icons.error_outline,
+                            size: 60, color: Colors.red),
                         const SizedBox(height: 16),
                         Text('Error: ${snapshot.error}'),
                       ],
@@ -349,12 +353,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AddInventoryScreen()),
+            MaterialPageRoute(builder: (context) => const SelectTypeScreen()),
           );
         },
         backgroundColor: Colors.purple,
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -403,7 +408,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: stockColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -425,7 +431,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            
+
             // SKU and Capacity info
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -455,7 +461,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            
+
             // Stock progress bar
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,7 +500,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            
+
             // Action buttons
             Row(
               children: [
@@ -503,7 +509,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     onPressed: () {
                       // TODO: Navigate to edit inventory item
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Edit ${item.name} - coming soon!')),
+                        SnackBar(
+                            content: Text('Edit ${item.name} - coming soon!')),
                       );
                     },
                     icon: const Icon(Icons.edit, size: 18),
