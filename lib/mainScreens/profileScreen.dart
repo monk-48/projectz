@@ -1,29 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:projectz/authentication/authScreen.dart';
-import 'package:projectz/mainScreens/editProfileScreen.dart';
+import '../config/app_theme.dart';
+import 'editProfileScreen.dart';
 
-/// Profile screen displays user information and provides account management
-/// Following Single Responsibility Principle - handles only profile display and basic actions
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // User data state
-  String _sellerName = "";
-  String _sellerEmail = "";
-  String _sellerImageUrl = "";
-  String _sellerPhone = "";
-  String _shopName = "";
-  String _shopImage = "";
-  String _shopAddress = "";
   bool _isLoading = true;
+  Map<String, dynamic>? _userData;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
@@ -31,389 +23,491 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserProfile();
   }
 
-  /// Loads user profile data from Firestore
-  /// Separation of concerns - data fetching logic isolated
   Future<void> _loadUserProfile() async {
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-
-      if (currentUser == null) {
-        _navigateToAuth();
-        return;
-      }
-
-      final sellerSnapshot = await FirebaseFirestore.instance
-          .collection("sellers")
-          .doc(currentUser.uid)
-          .get();
-
-      if (sellerSnapshot.exists && mounted) {
-        final data = sellerSnapshot.data()!;
-        setState(() {
-          _sellerName = data["sellerName"] ?? "";
-          _sellerEmail = data["sellerEmail"] ?? "";
-          _sellerImageUrl = data["sellerAvatarUrl"] ?? "";
-          _sellerPhone = data["phone"] ?? "";
-          // Shop details with fallbacks to user details
-          _shopName = data["shopName"] ?? data["sellerName"] ?? "My Shop";
-          _shopImage = data["shopImage"] ?? data["sellerAvatarUrl"] ?? "";
-          _shopAddress = data["address"] ?? "";
-          _isLoading = false;
-        });
+      User? user = _auth.currentUser;
+      if (user != null) {
+        DocumentSnapshot doc =
+            await _firestore.collection('sellers').doc(user.uid).get();
+        if (doc.exists) {
+          setState(() {
+            _userData = doc.data() as Map<String, dynamic>;
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
-      debugPrint("Error loading profile: $e");
+      setState(() {
+        _isLoading = false;
+      });
       if (mounted) {
-        setState(() => _isLoading = false);
-        _showErrorMessage("Failed to load profile data");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading profile: $e'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
       }
     }
-  }
-
-  /// Handles user sign out
-  /// Clear local data and navigate to authentication
-  Future<void> _handleSignOut() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      await FirebaseAuth.instance.signOut();
-
-      if (mounted) {
-        _navigateToAuth();
-      }
-    } catch (e) {
-      debugPrint("Error signing out: $e");
-      if (mounted) {
-        _showErrorMessage("Failed to sign out");
-      }
-    }
-  }
-
-  /// Shows logout confirmation dialog
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Logout"),
-        content: const Text("Are you sure you want to logout?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _handleSignOut();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: const Text(
-              "Logout",
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Navigation helpers
-  void _navigateToAuth() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const AuthScreen()),
-    );
-  }
-
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _buildAppBar(),
-      body: _isLoading ? _buildLoadingView() : _buildProfileContent(),
+      backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: AppTheme.primaryColor),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'My Profile',
+          style: AppTheme.titleLarge.copyWith(
+            color: AppTheme.primaryColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.edit_outlined, color: AppTheme.secondaryColor),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EditProfileScreen(),
+                ),
+              );
+              _loadUserProfile();
+            },
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? Center(
+              child: CircularProgressIndicator(
+                color: AppTheme.primaryColor,
+              ),
+            )
+          : _userData == null
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  color: AppTheme.primaryColor,
+                  onRefresh: _loadUserProfile,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      children: [
+                        _buildProfileHeader(),
+                        const SizedBox(height: 16),
+                        _buildShopInfoCard(),
+                        const SizedBox(height: 16),
+                        _buildPersonalInfoCard(),
+                        const SizedBox(height: 16),
+                        _buildContactInfoCard(),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
+                ),
     );
   }
 
-  /// Builds app bar with logout action
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      title: const Text(
-        'Profile',
-        style: TextStyle(color: Colors.white),
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.person_off_outlined,
+            size: 80,
+            color: AppTheme.textHint,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Profile not found',
+            style: AppTheme.titleLarge.copyWith(color: AppTheme.textHint),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Please complete your profile setup',
+            style: AppTheme.bodyMedium.copyWith(color: AppTheme.textHint),
+          ),
+        ],
       ),
-      backgroundColor: Colors.purple,
-      iconTheme: const IconThemeData(color: Colors.white),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.logout),
-          onPressed: _showLogoutDialog,
+    );
+  }
+
+  Widget _buildProfileHeader() {
+    String? shopImageUrl = _userData?['shopImage'];
+    String shopName = _userData?['shopName'] ?? 'Shop Name';
+    String category = _userData?['shopCategory'] ?? 'Category';
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 24),
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppTheme.primaryColor.withOpacity(0.3),
+                width: 3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryColor.withOpacity(0.2),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: (shopImageUrl != null && shopImageUrl.isNotEmpty)
+                  ? Image.network(
+                      shopImageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: AppTheme.primaryColor.withOpacity(0.1),
+                          child: Icon(
+                            Icons.store_rounded,
+                            size: 50,
+                            color: AppTheme.primaryColor,
+                          ),
+                        );
+                      },
+                    )
+                  : Container(
+                      color: AppTheme.primaryColor.withOpacity(0.1),
+                      child: Icon(
+                        Icons.store_rounded,
+                        size: 50,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            shopName,
+            style: AppTheme.headlineMedium.copyWith(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              category,
+              style: AppTheme.labelLarge.copyWith(
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          _buildStatsRow(),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildStatItem(
+            icon: Icons.inventory_2_outlined,
+            label: 'Products',
+            value: '0',
+          ),
+          Container(
+            height: 40,
+            width: 1,
+            color: AppTheme.dividerColor,
+          ),
+          _buildStatItem(
+            icon: Icons.shopping_bag_outlined,
+            label: 'Orders',
+            value: '0',
+          ),
+          Container(
+            height: 40,
+            width: 1,
+            color: AppTheme.dividerColor,
+          ),
+          _buildStatItem(
+            icon: Icons.star_outline_rounded,
+            label: 'Rating',
+            value: '4.5',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: AppTheme.primaryColor, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: AppTheme.titleLarge.copyWith(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
         ),
       ],
     );
   }
 
-  /// Loading indicator
-  Widget _buildLoadingView() {
-    return const Center(
-      child: CircularProgressIndicator(),
-    );
-  }
-
-  /// Main profile content
-  Widget _buildProfileContent() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          _buildShopImage(),
-          const SizedBox(height: 24),
-          _buildShopInfo(),
-          const SizedBox(height: 24),
-          _buildUserInfo(),
-          const SizedBox(height: 32),
-          _buildProfileActions(),
-        ],
-      ),
-    );
-  }
-
-  /// Shop image widget
-  Widget _buildShopImage() {
+  Widget _buildShopInfoCard() {
     return Container(
-      width: 150,
-      height: 150,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purple, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.purple.withOpacity(0.2),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: _shopImage.isNotEmpty
-            ? Image.network(
-                _shopImage,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildDefaultShopIcon();
-                },
-              )
-            : _buildDefaultShopIcon(),
-      ),
-    );
-  }
-
-  /// Default shop icon when no image is set
-  Widget _buildDefaultShopIcon() {
-    return Container(
-      color: Colors.purple.shade50,
-      child: const Icon(
-        Icons.store,
-        size: 80,
-        color: Colors.purple,
-      ),
-    );
-  }
-
-  /// Shop information display
-  Widget _buildShopInfo() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Text(
-                _shopName,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.purple,
-                ),
-              ),
-            ),
-            const Divider(height: 24),
-            _buildInfoRow(Icons.phone, "Contact", _sellerPhone),
-            const Divider(height: 24),
-            _buildInfoRow(Icons.location_on, "Address", _shopAddress),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// User information display
-  Widget _buildUserInfo() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.purple.shade100,
-                  backgroundImage: _sellerImageUrl.isNotEmpty
-                      ? NetworkImage(_sellerImageUrl)
-                      : null,
-                  child: _sellerImageUrl.isEmpty
-                      ? const Icon(
-                          Icons.person,
-                          size: 30,
-                          color: Colors.purple,
-                        )
-                      : null,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.store_rounded,
+                    color: AppTheme.primaryColor,
+                    size: 20,
+                  ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _sellerName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _sellerEmail,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
+                const SizedBox(width: 12),
+                Text(
+                  'Shop Information',
+                  style: AppTheme.titleMedium.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          Divider(height: 1, color: AppTheme.dividerColor),
+          _buildInfoRow(
+            icon: Icons.description_outlined,
+            label: 'Description',
+            value: _userData?['shopDescription'] ?? 'Not provided',
+          ),
+          _buildInfoRow(
+            icon: Icons.location_on_outlined,
+            label: 'Address',
+            value: _userData?['shopAddress'] ?? 'Not provided',
+          ),
+          _buildInfoRow(
+            icon: Icons.pin_drop_outlined,
+            label: 'Pincode',
+            value: _userData?['pincode'] ?? 'Not provided',
+          ),
+          _buildInfoRow(
+            icon: Icons.location_city_outlined,
+            label: 'City',
+            value: _userData?['city'] ?? 'Not provided',
+            isLast: true,
+          ),
+        ],
       ),
     );
   }
 
-  /// Individual info row
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.purple, size: 24),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
+  Widget _buildPersonalInfoCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    color: AppTheme.success,
+                    size: 20,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value.isNotEmpty ? value : "Not provided",
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                const SizedBox(width: 12),
+                Text(
+                  'Personal Information',
+                  style: AppTheme.titleMedium.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: AppTheme.dividerColor),
+          _buildInfoRow(
+            icon: Icons.badge_outlined,
+            label: 'Full Name',
+            value: _userData?['sellerName'] ?? 'Not provided',
+          ),
+          _buildInfoRow(
+            icon: Icons.cake_outlined,
+            label: 'Date of Birth',
+            value: _userData?['dob'] ?? 'Not provided',
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactInfoCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.contact_mail_outlined,
+                    color: AppTheme.warning,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Contact Information',
+                  style: AppTheme.titleMedium.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: AppTheme.dividerColor),
+          _buildInfoRow(
+            icon: Icons.email_outlined,
+            label: 'Email',
+            value: _userData?['sellerEmail'] ?? 'Not provided',
+          ),
+          _buildInfoRow(
+            icon: Icons.phone_outlined,
+            label: 'Phone',
+            value: _userData?['phone'] ?? 'Not provided',
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isLast = false,
+  }) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: AppTheme.textSecondary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTheme.bodySmall.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: AppTheme.bodyMedium.copyWith(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
+        if (!isLast)
+          Divider(
+            height: 1,
+            color: AppTheme.dividerColor,
+            indent: 48,
+          ),
       ],
-    );
-  }
-
-  /// Profile action buttons
-  Widget _buildProfileActions() {
-    return Column(
-      children: [
-        _buildActionButton(
-          icon: Icons.edit,
-          label: "Edit Profile",
-          color: Colors.blue,
-          onTap: _navigateToEditProfile,
-        ),
-      ],
-    );
-  }
-
-  /// Navigate to edit profile screen
-  Future<void> _navigateToEditProfile() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-    );
-
-    // Reload profile if changes were saved
-    if (result == true) {
-      _loadUserProfile();
-    }
-  }
-
-  /// Reusable action button
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios, color: color, size: 16),
-          ],
-        ),
-      ),
     );
   }
 }

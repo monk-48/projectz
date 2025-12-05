@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:projectz/mainScreens/profileScreen.dart';
 import 'package:projectz/mainScreens/ordersScreen.dart';
 import 'package:projectz/mainScreens/addProduct/selectTypeScreen.dart';
 import 'package:projectz/models/inventory_item.dart';
+import 'package:projectz/authentication/authScreen.dart';
 
 /// Home Screen - Landing page after authentication
 /// Following Clean Architecture and SOLID principles
@@ -129,6 +131,11 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: const Icon(Icons.shopping_cart, color: Colors.white),
           onPressed: _navigateToOrders,
           tooltip: 'Orders',
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout, color: Colors.white),
+          onPressed: _showLogoutConfirmation,
+          tooltip: 'Logout',
         ),
       ],
     );
@@ -495,6 +502,62 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const SelectTypeScreen()),
     );
+  }
+
+  /// Show logout confirmation dialog
+  void _showLogoutConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              await _performLogout();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Perform logout
+  Future<void> _performLogout() async {
+    try {
+      // Clear SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // Sign out from Firebase
+      await FirebaseAuth.instance.signOut();
+
+      if (mounted) {
+        // Navigate to Auth screen and clear navigation stack
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const AuthScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      debugPrint("Error during logout: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error logging out: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Show edit dialog for inventory item

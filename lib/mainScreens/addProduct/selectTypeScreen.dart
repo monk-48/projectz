@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:projectz/config/app_theme.dart';
 import 'package:projectz/mainScreens/addProduct/selectBrandScreen.dart';
 
 /// Step 1: Select Product Type
@@ -73,12 +74,16 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
   void _proceedToNextStep() {
     if (_selectedType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a product type')),
+        SnackBar(
+          content: const Text('Please select a product type'),
+          backgroundColor: AppTheme.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
       );
       return;
     }
 
-    // Navigate to brand selection screen
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -94,13 +99,22 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Add New Product',
-          style: TextStyle(color: Colors.white),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: AppTheme.primaryColor),
+          onPressed: () => Navigator.pop(context),
         ),
-        backgroundColor: Colors.purple,
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text(
+          'Add New Product',
+          style: AppTheme.titleLarge.copyWith(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -108,31 +122,25 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 20),
-            // Step indicator
             _buildStepIndicator(),
             const SizedBox(height: 40),
-            // Title
-            const Text(
+            Text(
               'Step 1: Select Product Type',
-              style: TextStyle(
-                fontSize: 24,
+              style: AppTheme.headlineMedium.copyWith(
+                color: AppTheme.textPrimary,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
               ),
             ),
             const SizedBox(height: 10),
             Text(
               'Choose the type of product you want to add',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade600,
+              style: AppTheme.bodyMedium.copyWith(
+                color: AppTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 40),
-            // Dropdown
             _buildTypeDropdown(),
             const Spacer(),
-            // Next button
             _buildNextButton(),
             const SizedBox(height: 20),
           ],
@@ -141,7 +149,6 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
     );
   }
 
-  /// Step indicator
   Widget _buildStepIndicator() {
     return Row(
       children: [
@@ -159,16 +166,23 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: isActive ? Colors.purple : Colors.grey.shade300,
+        color: isActive ? AppTheme.primaryColor : AppTheme.dividerColor,
         shape: BoxShape.circle,
+        boxShadow: isActive ? [
+          BoxShadow(
+            color: AppTheme.primaryColor.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ] : null,
       ),
       child: Center(
         child: Text(
           '$step',
           style: TextStyle(
-            color: isActive ? Colors.white : Colors.grey.shade600,
+            color: isActive ? Colors.white : AppTheme.textSecondary,
             fontWeight: FontWeight.bold,
-            fontSize: 18,
+            fontSize: 16,
           ),
         ),
       ),
@@ -178,59 +192,82 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
   Widget _buildStepLine(bool isActive) {
     return Expanded(
       child: Container(
-        height: 2,
-        color: isActive ? Colors.purple : Colors.grey.shade300,
-      ),
-    );
-  }
-
-  /// Type dropdown
-  Widget _buildTypeDropdown() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.purple, width: 2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedType,
-          hint: const Text(
-            'Select Product Type',
-            style: TextStyle(fontSize: 16),
-          ),
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.purple),
-          items: _productTypes.map((type) {
-            return DropdownMenuItem<String>(
-              value: type,
-              child: Row(
-                children: [
-                  _getTypeIcon(type),
-                  const SizedBox(width: 12),
-                  Text(
-                    type,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedType = value;
-            });
-          },
+        height: 3,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: isActive ? AppTheme.primaryColor : AppTheme.dividerColor,
+          borderRadius: BorderRadius.circular(2),
         ),
       ),
     );
   }
 
-  /// Get icon for product type
+  Widget _buildTypeDropdown() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        boxShadow: AppTheme.cardShadow,
+      ),
+      child: DropdownButtonFormField<String>(
+        value: _selectedType,
+        hint: Text(
+          'Select Product Type',
+          style: AppTheme.bodyMedium.copyWith(color: AppTheme.textHint),
+        ),
+        isExpanded: true,
+        icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.primaryColor),
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderSide: BorderSide(color: AppTheme.borderColor),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderSide: BorderSide(color: AppTheme.borderColor),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+          ),
+        ),
+        items: _productTypes.map((type) {
+          return DropdownMenuItem<String>(
+            value: type,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: _getTypeIcon(type),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  type,
+                  style: AppTheme.bodyLarge.copyWith(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedType = value;
+          });
+        },
+      ),
+    );
+  }
+
   Widget _getTypeIcon(String type) {
     IconData iconData;
-    Color iconColor = Colors.purple;
-
     switch (type) {
       case 'Cement':
         iconData = Icons.construction;
@@ -239,7 +276,7 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
         iconData = Icons.palette;
         break;
       case 'Brick':
-        iconData = Icons.square;
+        iconData = Icons.square_rounded;
         break;
       case 'Tiles/Marbles':
         iconData = Icons.grid_on;
@@ -250,36 +287,39 @@ class _SelectTypeScreenState extends State<SelectTypeScreen> {
       default:
         iconData = Icons.category;
     }
-
-    return Icon(iconData, color: iconColor, size: 24);
+    return Icon(iconData, color: AppTheme.primaryColor, size: 20);
   }
 
-  /// Next button
   Widget _buildNextButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 55,
+      height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        gradient: AppTheme.primaryGradient,
+        boxShadow: AppTheme.buttonShadow,
+      ),
       child: ElevatedButton(
         onPressed: _proceedToNextStep,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.purple,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           ),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Next',
-              style: TextStyle(
+              'Continue',
+              style: AppTheme.titleMedium.copyWith(
                 color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(width: 8),
-            Icon(Icons.arrow_forward, color: Colors.white),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_rounded, color: Colors.white),
           ],
         ),
       ),

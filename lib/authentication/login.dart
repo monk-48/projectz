@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:projectz/widgets/loadingDialog.dart';
 import 'package:projectz/mainScreens/homeScreen.dart';
+import 'package:projectz/mainScreens/profileSetupScreen.dart';
 
 class loginScreen extends StatefulWidget {
   const loginScreen({Key? key}) : super(key: key);
@@ -14,7 +15,6 @@ class loginScreen extends StatefulWidget {
 }
 
 class _loginScreenState extends State<loginScreen> {
-
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   TextEditingController emailFieldController = TextEditingController();
   TextEditingController passwordFieldController = TextEditingController();
@@ -113,10 +113,12 @@ class _loginScreenState extends State<loginScreen> {
     try {
       final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
 
-      await firebaseAuth.signInWithEmailAndPassword(
+      await firebaseAuth
+          .signInWithEmailAndPassword(
         email: emailFieldController.text.trim(),
         password: passwordFieldController.text.trim(),
-      ).then((auth) {
+      )
+          .then((auth) {
         currentUser = auth.user;
       });
 
@@ -128,7 +130,7 @@ class _loginScreenState extends State<loginScreen> {
       Navigator.pop(context); // Close loading dialog
 
       String errorMessage = "";
-      
+
       if (e.code == 'user-not-found') {
         errorMessage = "No user found with this email.";
       } else if (e.code == 'wrong-password') {
@@ -197,16 +199,27 @@ class _loginScreenState extends State<loginScreen> {
           .get();
 
       if (sellerSnapshot.exists) {
+        final data = sellerSnapshot.data() as Map<String, dynamic>;
+        final bool profileComplete = data['profileComplete'] ?? false;
+
         // Save user data to SharedPreferences
         await saveUserDataToSharedPreferences(currentUser, sellerSnapshot);
 
         Navigator.pop(context); // Close loading dialog
 
-        // Navigate to HomeScreen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (c) => const HomeScreen()),
-        );
+        if (profileComplete) {
+          // Profile is complete, go to HomeScreen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (c) => const HomeScreen()),
+          );
+        } else {
+          // Profile incomplete, go to ProfileSetupScreen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (c) => const ProfileSetupScreen()),
+          );
+        }
       } else {
         Navigator.pop(context); // Close loading dialog
 
@@ -261,8 +274,7 @@ class _loginScreenState extends State<loginScreen> {
 
     await prefs.setString("sellerUID", currentUser.uid);
     await prefs.setString("sellerEmail", currentUser.email ?? "");
-    await prefs.setString(
-        "sellerName", sellerSnapshot.get("sellerName") ?? "");
+    await prefs.setString("sellerName", sellerSnapshot.get("sellerName") ?? "");
     await prefs.setString(
         "sellerAvatarUrl", sellerSnapshot.get("sellerAvatarUrl") ?? "");
     await prefs.setString("phone", sellerSnapshot.get("phone") ?? "");
@@ -279,56 +291,58 @@ class _loginScreenState extends State<loginScreen> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            Container(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Image.asset(
-                  'images/seller.png',
-                  height: 270,
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Container(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Image.asset(
+                'images/seller.png',
+                height: 270,
+              ),
+            ),
+          ),
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                CustomTextField(
+                  controller: emailFieldController,
+                  data: Icons.email,
+                  hintText: 'Email',
+                  isObsecure: false,
                 ),
-              ),
-            ),
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  CustomTextField(
-                    controller: emailFieldController,
-                    data: Icons.email,
-                    hintText: 'Email',
-                    isObsecure: false,
-                  ),
-                  CustomTextField(
-                    controller: passwordFieldController,
-                    data: Icons.lock,
-                    hintText: 'Password',
-                  ),
-                ],
-              ),
-            ),
-            ElevatedButton(
-              child: const Text(
-                "LogIn",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
+                CustomTextField(
+                  controller: passwordFieldController,
+                  data: Icons.lock,
+                  hintText: 'Password',
                 ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
-                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
-              ),
-              onPressed: () {
-                formValidation();
-              },
+              ],
             ),
-            const SizedBox( height: 30, ),
-          ],
-        ),
+          ),
+          ElevatedButton(
+            child: const Text(
+              "LogIn",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
+            ),
+            onPressed: () {
+              formValidation();
+            },
+          ),
+          const SizedBox(
+            height: 30,
+          ),
+        ],
+      ),
     );
   }
 }
